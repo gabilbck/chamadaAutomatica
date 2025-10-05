@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 
 void main() {
   runApp(const MyApp());
@@ -7,116 +8,319 @@ void main() {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      debugShowCheckedModeBanner: false,
+      title: 'Chamada Automatizada',
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF891946)),
+        useMaterial3: true,
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const HomeScreen(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _HomeScreenState extends State<HomeScreen> {
+  DateTime? proximaChamada;
+  int numeroAula = 0;
 
-  void _incrementCounter() {
+  // Simulações de status de localização
+  bool localizacaoAtiva = true;
+  bool localizacaoCorreta = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _calcularProximaChamada();
+  }
+
+  void _calcularProximaChamada() {
+    final agora = DateTime.now();
+
+    final List<TimeOfDay> horariosChamadas = [
+      const TimeOfDay(hour: 19, minute: 50),
+      const TimeOfDay(hour: 20, minute: 40),
+      const TimeOfDay(hour: 21, minute: 40),
+      const TimeOfDay(hour: 22, minute: 30),
+    ];
+
+    DateTime? proxima;
+    int? aula;
+
+    for (int i = 0; i < horariosChamadas.length; i++) {
+      final h = horariosChamadas[i];
+      final chamadaHoje = DateTime(
+        agora.year,
+        agora.month,
+        agora.day,
+        h.hour,
+        h.minute,
+      );
+
+      if (agora.isBefore(chamadaHoje)) {
+        proxima = chamadaHoje;
+        aula = i + 1;
+        break;
+      }
+    }
+
+    if (proxima == null) {
+      final h = horariosChamadas.first;
+      proxima = DateTime(
+        agora.year,
+        agora.month,
+        agora.day + 1,
+        h.hour,
+        h.minute,
+      );
+      aula = 1;
+    }
+
     setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+      proximaChamada = proxima;
+      numeroAula = aula!;
     });
+  }
+
+  void _validarChamada() {
+    final agora = DateTime.now();
+    final diferenca = agora.difference(proximaChamada!).inMinutes;
+
+    // Verificações em ordem
+    if (agora.isBefore(proximaChamada!)) {
+      _mostrarDialogo(
+        titulo: 'Chamada NÃO validada!',
+        mensagem:
+            'Não é possível validar a chamada ainda, aguarde até o próximo horário.',
+      );
+    } else if (!localizacaoAtiva) {
+      _mostrarDialogo(
+        titulo: 'Chamada NÃO validada!',
+        mensagem:
+            'Sua localização não está ativada. Ative-a nas configurações do app para validar a chamada!',
+        justificavel: true,
+      );
+    } else if (!localizacaoCorreta) {
+      _mostrarDialogo(
+        titulo: 'Chamada NÃO validada!',
+        mensagem:
+            'Sua localização atual não corresponde à localização da sala de aula para validar sua presença.',
+        justificavel: true,
+      );
+    } else if (diferenca > 1) {
+      _mostrarDialogo(
+        titulo: 'Chamada NÃO validada!',
+        mensagem:
+            'Sua validação ultrapassou o 1 minuto limite. Não é possível validar após o tempo limite.',
+        justificavel: true,
+      );
+    } else {
+      _mostrarDialogo(
+        titulo: 'Chamada Validada!',
+        mensagem: 'Chamada ${numeroAula}ª aula registrada com sucesso!',
+        sucesso: true,
+      );
+      _calcularProximaChamada();
+    }
+  }
+
+  void _mostrarDialogo({
+    required String titulo,
+    required String mensagem,
+    bool sucesso = false,
+    bool justificavel = false,
+  }) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Colors.black),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Align(
+                alignment: Alignment.topLeft,
+                child: GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: const Text(
+                    'X',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                titulo,
+                style: TextStyle(
+                  color: sucesso ? Colors.green : const Color(0xFF891946),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                mensagem,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 15),
+              ),
+              const SizedBox(height: 20),
+              if (justificavel) ...[
+                const Text(
+                  'Deseja justificar no relatório?',
+                  style: TextStyle(
+                    color: Color(0xFF891946),
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: 120,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF891946),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                    ),
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Justificar'),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
+    const Color corPrincipal = Color(0xFF891946);
+    const Color fundoSuave = Color(0xFFF0DCE1);
+
+    String dataFormatada = proximaChamada != null
+        ? '${proximaChamada!.day.toString().padLeft(2, '0')}/'
+              '${proximaChamada!.month.toString().padLeft(2, '0')} '
+              '${proximaChamada!.hour.toString().padLeft(2, '0')}:'
+              '${proximaChamada!.minute.toString().padLeft(2, '0')}'
+        : '--/-- --:--';
+
     return Scaffold(
+      backgroundColor: fundoSuave,
       appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
+        backgroundColor: corPrincipal,
+        title: const Text(
+          'Chamada Automatizada',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // QUADRO PRINCIPAL
+              SizedBox(
+                width: double.infinity,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.black, width: 1),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 24,
+                    horizontal: 16,
+                  ),
+                  child: Column(
+                    children: [
+                      Text(
+                        'Próxima Chamada ${numeroAula}ª aula',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        dataFormatada,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Colors.black87,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 40),
+              _BotaoPrincipal(
+                texto: 'Validar Chamada',
+                cor: corPrincipal,
+                onPressed: _validarChamada,
+              ),
+              const SizedBox(height: 20),
+              _BotaoPrincipal(texto: 'Gerar Relatório', cor: corPrincipal),
+              const SizedBox(height: 20),
+              _BotaoPrincipal(texto: 'Configurações', cor: corPrincipal),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BotaoPrincipal extends StatelessWidget {
+  final String texto;
+  final Color cor;
+  final VoidCallback? onPressed;
+  const _BotaoPrincipal({
+    required this.texto,
+    required this.cor,
+    this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      height: 48,
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: cor,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+            side: const BorderSide(color: Colors.black, width: 1),
+          ),
+        ),
+        onPressed: onPressed,
+        child: Text(
+          texto,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+        ),
+      ),
     );
   }
 }
